@@ -1,9 +1,11 @@
-TITLE: The logistic map, chaos, and fractals
-AUTHOR: David I. Ketcheson dketch@gmail.com
+TITLE: The logistic map: chaos, fractals, and universality
+AUTHOR: David I. Ketcheson
 DATE: today
 TOC: on
 
-I first learned about chaotic dynamics by reading James Gleick's book 
+_This notebook is released under the CC-BY 3.0 license._
+
+I first learned about chaotic dynamics while reading James Gleick's book 
 [Chaos - making a new science](http://en.wikipedia.org/wiki/Chaos:_Making_a_New_Science)
 when I was 15.  It left a deep impression on me, and heightened
 my growing love of mathematics.  The stories that most stand out in my mind,
@@ -29,6 +31,8 @@ o The values $x_n$ get larger and larger without bound.
 We will avoid case #3 by taking $0<x_0<1$ and $0<r<4$ (*why does this ensure that the sequence remains bounded?*).  Now let's experiment.
 
 !bc pycod
+import matplotlib
+matplotlib.rcParams.update({'font.size': 16})
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -68,6 +72,7 @@ def plot_logistic(i,x):
     plt.figure(figsize=size)
     plt.plot(x[:i],'-ok',linewidth=2)
     plt.ylim(0,1); plt.xlim(0,len(x))
+    plt.xlabel('r'); plt.ylabel('x')
 !ec
 
 !bc pycod
@@ -141,6 +146,7 @@ def logistic(r=1.0, N = 100, x0=0.2):
     ax2.plot([0]*n,x[-n:],'or',markersize=10,alpha=0.1)
     ax2.set_ylim(0,1)
     ax2.axis('off')
+    ax1.set_xlabel('r'); ax1.set_ylabel('x')
     
 interact(logistic,r=fixed(1.5),N=fixed(30),x0=(0.00,1,0.01));
 !ec
@@ -148,6 +154,7 @@ interact(logistic,r=fixed(1.5),N=fixed(30),x0=(0.00,1,0.01));
 No; any $x_0$ in $(0,1)$ will give a sequence approaching $1/3$.  We say that
 $0$ is an unstable equilibrium, while $1/3$ is a stable equilibrium.
 
+======= Interactive exploration =======
 Play around with the sliders below, and see if you can answer the following:
 
 o For what values of $r$ does $x_n \to 0$?
@@ -176,10 +183,12 @@ def plot_logistic_parabola(r=1.0,N=100,x0=0.6,j=1):
     plt.plot(xx,xx,'k',linewidth=2);
     for i in range(j-1):
         plt.plot([x[i],x[i],x[i+1]],[x[i],x[i+1],x[i+1]],'o-b',linewidth=2,alpha=0.4)
+    plt.xlabel('x'); plt.ylabel('x')
         
 interact(plot_logistic_parabola,r=(0,4,0.1),j=(1,100,1));
 !ec
 
+======= The bifurcation diagram: chaos and fractals =======
 There's a better way to see the whole range of behavior.  In the plots below, we'll use $r$ itself as the $x$-axis, and just show the last part of the sequence of values $x_n$ for each computation (i.e., the red dots from the plot above).
 
 !bc pycod
@@ -203,9 +212,12 @@ rs, vals = bifurcation_diagram()
 plt.figure(figsize=size)   
 plt.plot(rs,vals,'ok',**plotargs);
 plt.xlim(rs.min(),rs.max());
+plt.xlabel('r'); plt.ylabel('x')
 !ec
 
 This beautiful structure has some amazing properties.  It's easy to see the first few "period doublings": 1, 2, 4, 8, etc.  In fact, if you zoom in on that part there is an infinite sequence of doublings!  
+These doublings are called *bifurcations* and the picture above is referred to as a
+*bifurcation diagram*.
 
 But what happens next is even more incredible: **chaos**.  See the regions where almost everything seems to be filled in?  In fact, if we set $N$ and $m$ large enough, those regions *would* fill in completely.  Regardless of the value of $x_0$, the computed sequence will include values arbitrarily close to each real number in certain intervals.  These sequences never repeat.
 
@@ -234,4 +246,158 @@ for i, box in enumerate(boxes):
     ax[i].set_ylim(box[2],box[3]); ax[i].set_xlim(box[0],box[1])
 !ec
 
-In fact, it can be proved that any system exhibiting cycles of period three (remember what you saw with $r=3.83$ earlier?) must also exhibit chaotic behavior for some other parameter values.  This was made famous in James Yorke's paper "Period 3 implies chaos", but was in fact proven earlier by Sarkovskii.
+This structure continues forever; if you zoom in on any chaotic region,
+you will find within it smaller regions of periodicity among the chaos.
+
+In fact, it can be proved that any system exhibiting cycles of period three
+(remember what you saw with $r=3.83$ earlier?) must also exhibit chaotic
+behavior for some other parameter values.  This was made famous in James
+Yorke's paper "Period 3 implies chaos", but was in fact proven earlier by
+Sarkovskii.
+
+======= The period-doubling cascade and Feigenbaum's constant =======
+Here is a more structured manifestation of the fractal structure.  For
+$r\in(1,3)$, there is a single stable equilibrium.  At $r=3$, it splits
+into two; at $r\approx 3.4494897$ it splits into four; then 8, 16, 32,...
+The change in $r$ necessary to produce each successive period doubling
+is smaller than the last; in fact, the distance between doublings shrinks
+geomtrically, which means that an infinite number of doublings occur before
+you reach $r=3.57$!
+
+Here's a plot of the bifurcation diagram over that range of infinitely many
+doublings:
+
+!bc pycod
+rs, vals = bifurcation_diagram(r=(1.,3.57))
+plt.figure(figsize=size)   
+plt.plot(rs,vals,'ok',**plotargs);
+plt.xlim(rs.min(),rs.max());
+plt.xlabel('r'); plt.ylabel('x')
+!ec
+
+It's not very convincing, because almost all the doublings occur in a space
+too small to see on this plot.  How can we see them better?
+
+Geometric progressions become linear (i.e. evenly spaced) on a logarithmic scale.
+So all we have to do is plot the values versus $\log(X-r)$ where $X$ is the accumulation
+point of all these doublings.  Here goes: *(warning: this code takes several seconds
+to run)*
+
+!bc pycod
+up = 3.569945665
+N=40000; k=2000; m=3000; x0=0.4
+x = np.zeros((k,N))
+rs = np.logspace(-8,np.log10(up-1.),k)
+rs = up-rs
+x[:,0] = x0
+for n in range(N-1):
+    x[:,n+1] = rs * x[:,n] * (1. - x[:,n])
+x = x[:,-m:]
+
+fig, ax = plt.subplots(4,1,figsize=(16,20))
+ax[0].semilogx(up-rs,x,'ok',**plotargs);
+ax[0].set_ylim(0.3,0.9)
+ax[1].semilogx(up-rs,x,'ok',**plotargs);
+ax[1].set_ylim(0.47,0.52)
+ax[2].semilogx(up-rs,x,'ok',**plotargs);
+ax[2].set_ylim(0.4749,0.4762)
+ax[3].semilogx(up-rs,x,'ok',**plotargs);
+ax[3].set_ylim(0.47565,0.47573)
+xx = up-3
+ticks = []; labels = []
+for i in range(11):
+    ticks.append(xx)
+    labels.append(str(2**(i+1)))
+    for j in range(4):
+        ax[j].plot([xx,xx],[0,1],'--r',lw=2);
+    xx = xx/4.669201609102
+
+for j in range(4):
+    ax[j].set_xticks(ticks);
+    ax[j].set_xticklabels(labels);
+!ec
+
+Since we are using $\log(X-r)$ as the $x$-axis, the direction of increasing $r$ is
+now to the left.
+
+In each of the successive plots above, we zoom in (in the $y$-axis only) in
+order to be able to distinguish more of the period doublings.  What are the
+red vertical lines?  They mark where the doublings occur.  Notice that they
+are perfectly evenly spaced on this logarithmic scale.  The ratio of successive
+distances between doublings is
+
+$$\delta = 4.669201609102...$$
+
+a number "discovered first by Mitchell Feigenbaum in 1978": "http://permalink.lanl.gov/object/tr?what=info:lanl-repo/lareport/LA-UR-80-5007".  This number appears
+over and over in relation to 
+"all kinds of other systems": "http://en.wikipedia.org/wiki/List_of_chaotic_maps"
+that exhibit chaos and fractal structure, and has been confirmed by experimental
+measurements in physical systems!  It is believed to be transcendental,
+but nobody knows for sure.
+
+The ragged lines you see in the last plot above are the result of only computing
+a finite length sequence; if we computed more points they would straighten out,
+though eventually we would need to use more than double-precision accuracy
+to keep going.
+
+======= Universality =======
+The idea that many different dynamical systems have common quantitative properties
+(like relations to Feigenbaum's constant) is known as **universality**.  At this point
+you may be thinking that the logistic map is a very special and perhaps unique recursion,
+but nothing could be further from the truth.  For example, look what happens if
+we take the cubic map
+
+$$x_{n+1} = r x_n (1-x_n^2)$$
+
+and compute sequences for different values of $r$:
+
+!bc pycod
+def bifurcation_diagram_cubic(r=(0.8,3),N=2000,k=2000,m=200,x0=0.2):
+    x = np.zeros((k,N))
+    vals = np.zeros((k,m))
+    rs = np.linspace(r[0],r[1],k)
+    x[:,0] = x0
+    for n in range(N-1):
+        x[:,n+1] = rs * x[:,n]*(1-x[:,n]**2)
+    return rs, x[:,-m:]
+
+plotargs = {'markersize':0.5, 'alpha':0.4}
+rs, vals = bifurcation_diagram_cubic()
+plt.figure(figsize=size)   
+plt.plot(rs,vals,'ok',**plotargs);
+plt.xlim(rs.min(),rs.max());
+plt.ylim(0,1.18)
+plt.xlabel('r'); plt.ylabel('x')
+!ec
+
+The same structure appears!  Okay, but what if we take a totally different
+kind of function; say, a trigonometric function:
+
+$$x_{n+1} = r \sin(x_n)$$
+
+Here goes:
+
+!bc pycod
+def bifurcation_diagram(r=(0.8,4),N=2000,k=2000,m=200,x0=0.2):
+    """
+        r: Pair of numbers (rmin,rmax) indicating parameter range
+        k: Number of samples in r
+        N: Number of iterations per sequence
+        m: keep just the last m iterates
+    """
+    x = np.zeros((k,N))
+    vals = np.zeros((k,m))
+    rs = np.linspace(r[0],r[1],k)
+    x[:,0] = x0
+    for n in range(N-1):
+        x[:,n+1] = rs * np.sin(x[:,n])
+    return rs, x[:,-m:]
+
+plotargs = {'markersize':0.5, 'alpha':0.4}
+rs, vals = bifurcation_diagram()
+plt.figure(figsize=size)   
+plt.plot(rs,vals,'ok',**plotargs);
+plt.xlim(rs.min(),rs.max());
+plt.ylim(0,4)
+plt.xlabel('r'); plt.ylabel('x')
+!ec
